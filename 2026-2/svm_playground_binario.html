@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>SVM Playground</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+#header{background:#1a1d27;padding:8px 16px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #2d3148;flex-shrink:0}
+#header h1{font-size:15px;color:#7eb8f7;font-weight:600;letter-spacing:.5px}
+#header span{font-size:11px;color:#666;margin-left:auto}
+#main{display:flex;flex:1;overflow:hidden}
+#sidebar{width:230px;background:#13151f;padding:10px;overflow-y:auto;border-right:1px solid #2d3148;flex-shrink:0}
+#canvas-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:10px}
+#right-panel{width:210px;background:#13151f;padding:10px;overflow-y:auto;border-left:1px solid #2d3148;flex-shrink:0}
+
+.section{margin-bottom:12px}
+.section-title{font-size:10px;color:#7eb8f7;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-weight:700}
+label{font-size:11px;color:#aaa;display:block;margin-bottom:2px}
+select,input[type=range]{width:100%;background:#1e2130;border:1px solid #2d3148;color:#e0e0e0;border-radius:4px;padding:3px 5px;font-size:11px}
+input[type=range]{padding:0;cursor:pointer;accent-color:#7eb8f7}
+.val-display{font-size:10px;color:#7eb8f7;text-align:right;margin-top:-2px;margin-bottom:4px}
+.feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.feat-btn{background:#1e2130;border:1px solid #2d3148;color:#888;border-radius:4px;padding:4px 2px;font-size:10px;cursor:pointer;text-align:center;transition:all .15s;user-select:none}
+.feat-btn.active{background:#1e3a5f;border-color:#7eb8f7;color:#7eb8f7}
+.dataset-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px}
+.ds-btn{background:#1e2130;border:1px solid #2d3148;color:#888;border-radius:4px;padding:5px 2px;font-size:10px;cursor:pointer;text-align:center;transition:all .15s}
+.ds-btn.active{background:#1e3a5f;border-color:#7eb8f7;color:#7eb8f7}
+#run-btn{width:100%;padding:7px;background:#1a4a8a;border:none;border-radius:5px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-top:4px;transition:background .2s}
+#run-btn:hover{background:#2060b0}
+#run-btn.running{background:#8a3a1a;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+#reset-btn{width:100%;padding:5px;background:#1e2130;border:1px solid #2d3148;border-radius:5px;color:#aaa;font-size:11px;cursor:pointer;margin-top:4px}
+
+canvas{border-radius:8px;cursor:crosshair;border:1px solid #2d3148}
+#canvas-wrap{position:relative;display:inline-block}
+#overlay{position:absolute;top:0;left:0;pointer-events:none;border-radius:8px}
+
+.metric-box{background:#1e2130;border:1px solid #2d3148;border-radius:5px;padding:7px;margin-bottom:6px}
+.metric-label{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.8px}
+.metric-val{font-size:20px;font-weight:700;color:#7eb8f7;line-height:1.1}
+.metric-sub{font-size:9px;color:#555}
+#confusion{width:100%;font-size:10px;border-collapse:collapse;margin-top:4px}
+#confusion td,#confusion th{border:1px solid #2d3148;padding:3px 5px;text-align:center}
+#confusion th{background:#1a1d27;color:#7eb8f7;font-size:9px}
+#confusion td{background:#1e2130}
+.tp{color:#66bb6a}.tn{color:#66bb6a}.fp{color:#ef5350}.fn{color:#ef5350}
+#loss-canvas{width:100%;height:70px;background:#1e2130;border-radius:4px;border:1px solid #2d3148;display:block;margin-top:4px}
+#status{font-size:10px;color:#555;margin-top:4px;min-height:14px;text-align:center}
+#sv-info{font-size:10px;color:#888;margin-top:4px}
+
+.noise-wrap{display:flex;align-items:center;gap:6px}
+#add-class0{background:#1a2a3a;border:1px solid #3a6080;color:#7eb8f7;border-radius:4px;padding:3px 7px;font-size:10px;cursor:pointer}
+#add-class1{background:#2a1a1a;border:1px solid #803a3a;color:#f07070;border-radius:4px;padding:3px 7px;font-size:10px;cursor:pointer}
+.add-row{display:flex;gap:4px;margin-bottom:6px}
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>⚡ SVM Playground</h1>
+  <span id="status">Listo — genera datos y entrena</span>
+</div>
+<div id="main">
+
+<!-- SIDEBAR IZQUIERDO -->
+<div id="sidebar">
+
+  <div class="section">
+    <div class="section-title">Dataset</div>
+    <div class="dataset-grid">
+      <div class="ds-btn active" data-ds="moons">🌙 Lunas</div>
+      <div class="ds-btn" data-ds="circles">⭕ Círculos</div>
+      <div class="ds-btn" data-ds="xor">✖ XOR</div>
+      <div class="ds-btn" data-ds="linear">📏 Lineal</div>
+      <div class="ds-btn" data-ds="spiral">🌀 Espiral</div>
+      <div class="ds-btn" data-ds="blobs">🫧 Blobs</div>
+    </div>
+    <label>N puntos</label>
+    <input type="range" id="n-pts" min="40" max="300" value="120" step="10">
+    <div class="val-display" id="n-pts-val">120</div>
+    <label>Ruido</label>
+    <input type="range" id="noise" min="0" max="0.5" value="0.15" step="0.01">
+    <div class="val-display" id="noise-val">0.15</div>
+    <label>% Train</label>
+    <input type="range" id="train-pct" min="40" max="90" value="70" step="5">
+    <div class="val-display" id="train-pct-val">70%</div>
+    <div class="add-row">
+      <button id="add-class0">+ Azul</button>
+      <button id="add-class1">+ Rojo</button>
+    </div>
+    <button id="reset-btn" onclick="generateData()">🔄 Regenerar datos</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Kernel</div>
+    <select id="kernel">
+      <option value="rbf">RBF / Gaussiano</option>
+      <option value="linear">Lineal</option>
+      <option value="poly">Polinomial</option>
+      <option value="sigmoid">Sigmoide</option>
+    </select>
+    <div style="margin-top:6px">
+    <label>C (regularización)</label>
+    <input type="range" id="C" min="-3" max="3" value="0" step="0.1">
+    <div class="val-display" id="C-val">C = 1.00</div>
+    <div id="gamma-row">
+    <label>γ (gamma)</label>
+    <input type="range" id="gamma" min="-3" max="2" value="0" step="0.1">
+    <div class="val-display" id="gamma-val">γ = 1.00</div>
+    </div>
+    <div id="degree-row" style="display:none">
+    <label>Grado d</label>
+    <input type="range" id="degree" min="2" max="6" value="3" step="1">
+    <div class="val-display" id="degree-val">d = 3</div>
+    </div>
+    <div id="coef0-row" style="display:none">
+    <label>coef0</label>
+    <input type="range" id="coef0" min="-2" max="2" value="0" step="0.1">
+    <div class="val-display" id="coef0-val">coef0 = 0.0</div>
+    </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Features</div>
+    <div class="feature-grid" id="feat-grid">
+      <div class="feat-btn active" data-f="x1">x₁</div>
+      <div class="feat-btn active" data-f="x2">x₂</div>
+      <div class="feat-btn" data-f="x1x2">x₁·x₂</div>
+      <div class="feat-btn" data-f="x1sq">x₁²</div>
+      <div class="feat-btn" data-f="x2sq">x₂²</div>
+      <div class="feat-btn" data-f="sinx1">sin(x₁)</div>
+      <div class="feat-btn" data-f="sinx2">sin(x₂)</div>
+      <div class="feat-btn" data-f="r">‖x‖</div>
+    </div>
+  </div>
+
+  <button id="run-btn" onclick="trainSVM()">▶ Entrenar SVM</button>
+  <div style="margin-top:6px">
+    <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:#aaa">
+      <input type="checkbox" id="auto-train" style="width:auto"> Auto-entrenar al cambiar
+    </label>
+  </div>
+</div>
+
+<!-- CANVAS CENTRAL -->
+<div id="canvas-area">
+  <div id="canvas-wrap">
+    <canvas id="main-canvas" width="460" height="460"></canvas>
+    <canvas id="overlay" width="460" height="460"></canvas>
+  </div>
+  <div id="sv-info"></div>
+</div>
+
+<!-- PANEL DERECHO -->
+<div id="right-panel">
+  <div class="section">
+    <div class="section-title">Métricas</div>
+    <div class="metric-box">
+      <div class="metric-label">Accuracy — Train</div>
+      <div class="metric-val" id="acc-train">—</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">Accuracy — Test</div>
+      <div class="metric-val" id="acc-test">—</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">Precision / Recall</div>
+      <div style="display:flex;gap:6px">
+        <div><div class="metric-label">Prec</div><div class="metric-val" style="font-size:14px" id="prec">—</div></div>
+        <div><div class="metric-label">Rec</div><div class="metric-val" style="font-size:14px" id="rec">—</div></div>
+        <div><div class="metric-label">F1</div><div class="metric-val" style="font-size:14px" id="f1">—</div></div>
+      </div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">Vectores soporte</div>
+      <div class="metric-val" id="n-sv">—</div>
+      <div class="metric-sub" id="sv-pct">—</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Matriz de confusión</div>
+    <table id="confusion">
+      <tr><th></th><th>Pred −1</th><th>Pred +1</th></tr>
+      <tr><td style="color:#7eb8f7">Real −1</td><td class="tn" id="cm-tn">—</td><td class="fp" id="cm-fp">—</td></tr>
+      <tr><td style="color:#f07070">Real +1</td><td class="fn" id="cm-fn">—</td><td class="tp" id="cm-tp">—</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Curva de decisión (iteraciones SMO)</div>
+    <canvas id="loss-canvas" width="190" height="70"></canvas>
+    <div style="font-size:9px;color:#444;margin-top:2px">Objetivo dual W(α)</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Info kernel</div>
+    <div id="kernel-info" style="font-size:10px;color:#666;line-height:1.6"></div>
+  </div>
+</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// ESTADO GLOBAL
+// ═══════════════════════════════════════════
+const S = {
+  data: [], labels: [],
+  trainIdx: [], testIdx: [],
+  model: null,
+  features: new Set(['x1','x2']),
+  dataset: 'moons',
+  trained: false,
+  svmHistory: [],
+  addMode: null
+};
+
+const CANVAS = document.getElementById('main-canvas');
+const OVL = document.getElementById('overlay');
+const CTX = CANVAS.getContext('2d');
+const OCTX = OVL.getContext('2d');
+const W = CANVAS.width, H = CANVAS.height;
+const PAD = 30;
+
+// ═══════════════════════════════════════════
+// MAPEO coordenadas
+// ═══════════════════════════════════════════
+function toPixel(x, y, xr, yr) {
+  const px = PAD + (x - xr[0]) / (xr[1]-xr[0]) * (W - 2*PAD);
+  const py = H - PAD - (y - yr[0]) / (yr[1]-yr[0]) * (H - 2*PAD);
+  return [px, py];
+}
+function fromPixel(px, py, xr, yr) {
+  const x = xr[0] + (px - PAD) / (W - 2*PAD) * (xr[1]-xr[0]);
+  const y = yr[0] + (H - PAD - py) / (H - 2*PAD) * (yr[1]-yr[0]);
+  return [x, y];
+}
+
+// ═══════════════════════════════════════════
+// GENERACIÓN DE DATOS
+// ═══════════════════════════════════════════
+function randn() {
+  let u=0,v=0;
+  while(!u) u=Math.random();
+  while(!v) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function shuffle(arr) {
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  return arr;
+}
+
+function generateDataset(type, n, noise) {
+  const pts=[], labs=[];
+  if(type==='moons') {
+    for(let i=0;i<n;i++) {
+      const c=i<n/2?0:1;
+      const t=Math.PI*(i/(n/2-(c?n/2:0)));
+      const x=Math.cos(t)*(c?-1:1)+randn()*noise;
+      const y=Math.sin(t)*(c?-0.5:0.5)+randn()*noise;
+      pts.push([x,y]); labs.push(c?1:-1);
+    }
+  } else if(type==='circles') {
+    for(let i=0;i<n;i++) {
+      const c=i<n/2?0:1;
+      const r=(c?0.5:1.0)+randn()*noise*0.5;
+      const t=Math.random()*2*Math.PI;
+      pts.push([r*Math.cos(t),r*Math.sin(t)]); labs.push(c?1:-1);
+    }
+  } else if(type==='xor') {
+    for(let i=0;i<n;i++) {
+      const x=randn()*0.8, y=randn()*0.8;
+      const label=((x>0&&y>0)||(x<0&&y<0))?1:-1;
+      pts.push([x+randn()*noise, y+randn()*noise]); labs.push(label);
+    }
+  } else if(type==='linear') {
+    for(let i=0;i<n;i++) {
+      const x=randn(), y=randn();
+      const label=(y > 0.5*x + 0.2 + randn()*noise)?1:-1;
+      pts.push([x,y]); labs.push(label);
+    }
+  } else if(type==='spiral') {
+    for(let i=0;i<n;i++) {
+      const c=i<n/2?0:1;
+      const t=(i%(n/2))/(n/2)*3*Math.PI + (c?Math.PI:0);
+      const r=t/3/Math.PI;
+      pts.push([r*Math.cos(t)+randn()*noise*0.3, r*Math.sin(t)+randn()*noise*0.3]);
+      labs.push(c?1:-1);
+    }
+  } else { // blobs
+    const centers=[[-1,-1],[1,1],[-1,1],[1,-1]];
+    for(let i=0;i<n;i++) {
+      const c=i<n/2?0:1;
+      const ct=centers[c*2+Math.floor(Math.random()*2)];
+      pts.push([ct[0]+randn()*0.5+randn()*noise, ct[1]+randn()*0.5+randn()*noise]);
+      labs.push(c?1:-1);
+    }
+  }
+  return {pts, labs};
+}
+
+function generateData() {
+  const n = +document.getElementById('n-pts').value;
+  const noise = +document.getElementById('noise').value;
+  const pct = +document.getElementById('train-pct').value / 100;
+  const {pts, labs} = generateDataset(S.dataset, n, noise);
+  S.data = pts; S.labels = labs;
+  const idx = shuffle([...Array(n).keys()]);
+  const split = Math.floor(n * pct);
+  S.trainIdx = idx.slice(0, split);
+  S.testIdx  = idx.slice(split);
+  S.model = null; S.trained = false; S.svmHistory = [];
+  clearMetrics(); drawData(); updateLossCanvas();
+}
+
+// ═══════════════════════════════════════════
+// FEATURE ENGINEERING
+// ═══════════════════════════════════════════
+function extractFeatures(pts) {
+  return pts.map(([x1,x2]) => {
+    const row = [];
+    if(S.features.has('x1'))    row.push(x1);
+    if(S.features.has('x2'))    row.push(x2);
+    if(S.features.has('x1x2'))  row.push(x1*x2);
+    if(S.features.has('x1sq'))  row.push(x1*x1);
+    if(S.features.has('x2sq'))  row.push(x2*x2);
+    if(S.features.has('sinx1')) row.push(Math.sin(x1));
+    if(S.features.has('sinx2')) row.push(Math.sin(x2));
+    if(S.features.has('r'))     row.push(Math.sqrt(x1*x1+x2*x2));
+    return row;
+  });
+}
+
+// ═══════════════════════════════════════════
+// KERNELS
+// ═══════════════════════════════════════════
+function dot(a, b) { let s=0; for(let i=0;i<a.length;i++) s+=a[i]*b[i]; return s; }
+function norm2(a, b) { let s=0; for(let i=0;i<a.length;i++) s+=(a[i]-b[i])**2; return s; }
+
+function makeKernel(type, C_val, gamma_val, degree_val, coef0_val) {
+  if(type==='linear')  return (a,b) => dot(a,b);
+  if(type==='rbf')     return (a,b) => Math.exp(-gamma_val * norm2(a,b));
+  if(type==='poly')    return (a,b) => (gamma_val*dot(a,b)+coef0_val)**degree_val;
+  if(type==='sigmoid') return (a,b) => Math.tanh(gamma_val*dot(a,b)+coef0_val);
+}
+
+// ═══════════════════════════════════════════
+// SMO SIMPLIFICADO
+// ═══════════════════════════════════════════
+function trainSMO(X, y, kernel, C, tol=1e-3, maxPasses=15) {
+  const n = y.length;
+  const alpha = new Float64Array(n);
+  let b = 0;
+  const history = [];
+
+  // Cache Gram diagonal
+  const Kd = X.map((xi,i) => kernel(xi,xi));
+
+  // f(i) = sum_k alpha[k]*y[k]*K(xk,xi) + b
+  function f(i) {
+    let s = b;
+    for(let k=0;k<n;k++) if(alpha[k]>1e-8) s += alpha[k]*y[k]*kernel(X[k],X[i]);
+    return s;
+  }
+
+  let passes = 0;
+  while(passes < maxPasses) {
+    let changed = 0;
+    for(let i=0;i<n;i++) {
+      const Ei = f(i) - y[i];
+      if(!((y[i]*Ei < -tol && alpha[i] < C)||(y[i]*Ei > tol && alpha[i] > 0))) continue;
+      let j = Math.floor(Math.random()*n);
+      while(j===i) j = Math.floor(Math.random()*n);
+      const Ej = f(j) - y[j];
+      const ai0 = alpha[i], aj0 = alpha[j];
+      let L, H;
+      if(y[i]!==y[j]) { L=Math.max(0,aj0-ai0); H=Math.min(C,C+aj0-ai0); }
+      else             { L=Math.max(0,ai0+aj0-C); H=Math.min(C,ai0+aj0); }
+      if(L>=H) continue;
+      const eta = 2*kernel(X[i],X[j]) - Kd[i] - Kd[j];
+      if(eta>=0) continue;
+      let aj_new = Math.max(L, Math.min(H, aj0 - y[j]*(Ei-Ej)/eta));
+      if(Math.abs(aj_new-aj0)<1e-5) continue;
+      alpha[j] = aj_new;
+      alpha[i] = ai0 + y[i]*y[j]*(aj0-aj_new);
+      const Kij = kernel(X[i],X[j]);
+      const b1 = b - Ei - y[i]*(alpha[i]-ai0)*Kd[i] - y[j]*(alpha[j]-aj0)*Kij;
+      const b2 = b - Ej - y[i]*(alpha[i]-ai0)*Kij  - y[j]*(alpha[j]-aj0)*Kd[j];
+      b = (0<alpha[i]&&alpha[i]<C)?b1:(0<alpha[j]&&alpha[j]<C)?b2:(b1+b2)/2;
+      changed++;
+    }
+    // Objetivo dual W = sum(alpha) - 0.5*sum_ij alpha_i*alpha_j*y_i*y_j*K(xi,xj)
+    let W = 0;
+    for(let k=0;k<n;k++) W += alpha[k];
+    for(let ii=0;ii<n;ii++) for(let jj=0;jj<n;jj++)
+      W -= 0.5*alpha[ii]*alpha[jj]*y[ii]*y[jj]*kernel(X[ii],X[jj]);
+    history.push(W);
+    passes = changed===0 ? passes+1 : 0;
+  }
+
+  // SVs
+  const svIdx = [];
+  for(let i=0;i<n;i++) if(alpha[i]>1e-5) svIdx.push(i);
+
+  return {
+    alpha, b, svIdx,
+    predict(xNew) {
+      let s = b;
+      for(const k of svIdx) s += alpha[k]*y[k]*kernel(X[k],xNew);
+      return s;
+    },
+    history
+  };
+}
+
+// ═══════════════════════════════════════════
+// ENTRENAMIENTO
+// ═══════════════════════════════════════════
+function trainSVM() {
+  if(S.data.length===0) { generateData(); return; }
+  const btn = document.getElementById('run-btn');
+  btn.classList.add('running'); btn.textContent='⏳ Entrenando...';
+  document.getElementById('status').textContent = 'Ejecutando SMO...';
+
+  setTimeout(() => {
+    const C_log = +document.getElementById('C').value;
+    const C_val = Math.pow(10, C_log);
+    const g_log = +document.getElementById('gamma').value;
+    const g_val = Math.pow(10, g_log);
+    const deg   = +document.getElementById('degree').value;
+    const c0    = +document.getElementById('coef0').value;
+    const ktype = document.getElementById('kernel').value;
+
+    const allPts = extractFeatures(S.data);
+    const trainX = S.trainIdx.map(i => allPts[i]);
+    const trainY = S.trainIdx.map(i => S.labels[i]);
+
+    // Normalización (z-score por feature)
+    const nFeat = trainX[0].length;
+    const means = Array(nFeat).fill(0), stds = Array(nFeat).fill(1);
+    for(let f=0;f<nFeat;f++) {
+      means[f] = trainX.reduce((s,r)=>s+r[f],0)/trainX.length;
+      stds[f]  = Math.sqrt(trainX.reduce((s,r)=>s+(r[f]-means[f])**2,0)/trainX.length)||1;
+    }
+    const norm = rows => rows.map(r => r.map((v,f)=>(v-means[f])/stds[f]));
+    const XN = norm(trainX);
+
+    const kernel = makeKernel(ktype, C_val, g_val, deg, c0);
+    const model = trainSMO(XN, trainY, kernel, C_val);
+    model.normPredict = (rawPt) => {
+      const normed = rawPt.map((v,f)=>(v-means[f])/stds[f]);
+      return model.predict(normed);
+    };
+    model.means = means; model.stds = stds;
+    model.kernel = kernel; model.ktype = ktype;
+    model.C = C_val; model.gamma = g_val;
+    model.trainX = XN; model.trainY = trainY;
+
+    S.model = model; S.trained = true; S.svmHistory = model.history;
+
+    computeMetrics();
+    drawDecisionBoundary();
+    updateLossCanvas();
+    updateKernelInfo();
+
+    document.getElementById('n-sv').textContent = model.svIdx.length;
+    document.getElementById('sv-pct').textContent =
+      `${(100*model.svIdx.length/trainX.length).toFixed(1)}% del train`;
+    document.getElementById('sv-info').textContent =
+      `${model.svIdx.length} vectores soporte de ${trainX.length} puntos de entrenamiento`;
+
+    btn.classList.remove('running'); btn.textContent='▶ Entrenar SVM';
+    document.getElementById('status').textContent =
+      `Entrenado — ${model.svIdx.length} SVs — C=${C_val.toFixed(3)} γ=${g_val.toFixed(3)}`;
+  }, 30);
+}
+
+// ═══════════════════════════════════════════
+// MÉTRICAS
+// ═══════════════════════════════════════════
+function computeMetrics() {
+  const m = S.model;
+  if(!m) return;
+  const allPts = extractFeatures(S.data);
+  function evalSet(idx) {
+    let tp=0,tn=0,fp=0,fn=0;
+    for(const i of idx) {
+      const pred = Math.sign(m.normPredict(allPts[i]))||1;
+      const real = S.labels[i];
+      if(pred===1&&real===1) tp++;
+      else if(pred===-1&&real===-1) tn++;
+      else if(pred===1&&real===-1) fp++;
+      else fn++;
+    }
+    const acc = (tp+tn)/(tp+tn+fp+fn)||0;
+    const prec = tp/(tp+fp)||0;
+    const rec  = tp/(tp+fn)||0;
+    const f1   = 2*prec*rec/(prec+rec)||0;
+    return {acc,prec,rec,f1,tp,tn,fp,fn};
+  }
+  const tr = evalSet(S.trainIdx);
+  const te = evalSet(S.testIdx);
+  const pct = v => (100*v).toFixed(1)+'%';
+  document.getElementById('acc-train').textContent = pct(tr.acc);
+  document.getElementById('acc-test').textContent  = pct(te.acc);
+  document.getElementById('prec').textContent = pct(te.prec);
+  document.getElementById('rec').textContent  = pct(te.rec);
+  document.getElementById('f1').textContent   = pct(te.f1);
+  document.getElementById('cm-tp').textContent = te.tp;
+  document.getElementById('cm-tn').textContent = te.tn;
+  document.getElementById('cm-fp').textContent = te.fp;
+  document.getElementById('cm-fn').textContent = te.fn;
+
+  // Color acc-test: verde/amarillo/rojo
+  const v = te.acc;
+  const el = document.getElementById('acc-test');
+  el.style.color = v>0.9?'#66bb6a':v>0.75?'#ffca28':'#ef5350';
+}
+
+function clearMetrics() {
+  ['acc-train','acc-test','prec','rec','f1','n-sv'].forEach(id=>{
+    document.getElementById(id).textContent='—';
+    if(id==='acc-test') document.getElementById(id).style.color='#7eb8f7';
+  });
+  document.getElementById('sv-pct').textContent='—';
+  ['cm-tp','cm-tn','cm-fp','cm-fn'].forEach(id=>document.getElementById(id).textContent='—');
+}
+
+// ═══════════════════════════════════════════
+// DIBUJO
+// ═══════════════════════════════════════════
+function getDataRange() {
+  const xs = S.data.map(p=>p[0]), ys = S.data.map(p=>p[1]);
+  const xmn=Math.min(...xs)-0.5, xmx=Math.max(...xs)+0.5;
+  const ymn=Math.min(...ys)-0.5, ymx=Math.max(...ys)+0.5;
+  return {xr:[xmn,xmx], yr:[ymn,ymx]};
+}
+
+function drawData() {
+  const {xr, yr} = getDataRange();
+  CTX.clearRect(0,0,W,H);
+  // Fondo
+  CTX.fillStyle='#0f1117'; CTX.fillRect(0,0,W,H);
+  // Grid
+  CTX.strokeStyle='#1e2130'; CTX.lineWidth=0.5;
+  for(let gx=xr[0];gx<=xr[1];gx+=0.5){
+    const [px]=toPixel(gx,0,xr,yr);
+    CTX.beginPath();CTX.moveTo(px,PAD);CTX.lineTo(px,H-PAD);CTX.stroke();
+  }
+  for(let gy=yr[0];gy<=yr[1];gy+=0.5){
+    const [,py]=toPixel(0,gy,xr,yr);
+    CTX.beginPath();CTX.moveTo(PAD,py);CTX.lineTo(W-PAD,py);CTX.stroke();
+  }
+  // Ejes
+  CTX.strokeStyle='#2d3148'; CTX.lineWidth=1;
+  const [ax,]=toPixel(0,0,xr,yr); const [,ay]=toPixel(0,0,xr,yr);
+  CTX.beginPath();CTX.moveTo(ax,PAD);CTX.lineTo(ax,H-PAD);CTX.stroke();
+  CTX.beginPath();CTX.moveTo(PAD,ay);CTX.lineTo(W-PAD,ay);CTX.stroke();
+
+  drawPoints(CTX, xr, yr);
+}
+
+function drawPoints(ctx, xr, yr, highlight=null) {
+  for(let i=0;i<S.data.length;i++) {
+    const [px,py] = toPixel(S.data[i][0], S.data[i][1], xr, yr);
+    const isTrain = S.trainIdx.includes(i);
+    const col = S.labels[i]===1 ? '#ef5350' : '#42a5f5';
+    ctx.beginPath();
+    ctx.arc(px,py,isTrain?5:4,0,2*Math.PI);
+    ctx.fillStyle = isTrain?col:col+'88';
+    ctx.fill();
+    if(!isTrain){ctx.strokeStyle='#ffffff44';ctx.lineWidth=1;ctx.stroke();}
+    if(highlight && highlight.includes(i)){
+      ctx.beginPath();ctx.arc(px,py,9,0,2*Math.PI);
+      ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+    }
+  }
+}
+
+function drawDecisionBoundary() {
+  const m = S.model;
+  if(!m) return;
+  const {xr, yr} = getDataRange();
+  const RES = 80;
+  const dx = (xr[1]-xr[0])/RES, dy = (yr[1]-yr[0])/RES;
+  const imgW = W-2*PAD, imgH = H-2*PAD;
+  const imageData = CTX.createImageData(imgW, imgH);
+
+  // Calcular rango de valores de decisión para normalizar colores
+  const allPts = extractFeatures(S.data);
+
+  // Fondo de frontera
+  for(let pi=0;pi<RES;pi++) {
+    for(let pj=0;pj<RES;pj++) {
+      const wx = xr[0]+pi*dx, wy = yr[0]+pj*dy;
+      const feat = extractFeatures([[wx,wy]])[0];
+      const val = m.normPredict(feat);
+      const intensity = Math.min(1, Math.abs(val)/3);
+      const r = val>0 ? Math.round(40+intensity*80) : Math.round(20+intensity*40);
+      const g = val>0 ? Math.round(20+intensity*30) : Math.round(40+intensity*60);
+      const b = val>0 ? Math.round(20+intensity*30) : Math.round(80+intensity*80);
+
+      // Mapear a pixels del canvas
+      const x0 = Math.round(pi/RES*imgW), x1 = Math.round((pi+1)/RES*imgW);
+      const y0 = Math.round((1-pj/RES)*imgH - imgH/RES), y1 = Math.round((1-(pj-1)/RES)*imgH - imgH/RES);
+      for(let ix=Math.max(0,x0);ix<Math.min(imgW,x1);ix++) {
+        for(let iy=Math.max(0,y0);iy<Math.min(imgH,y1);iy++) {
+          const idx4 = (iy*imgW+ix)*4;
+          imageData.data[idx4]=r; imageData.data[idx4+1]=g;
+          imageData.data[idx4+2]=b; imageData.data[idx4+3]=200;
+        }
+      }
+    }
+  }
+
+  CTX.clearRect(0,0,W,H);
+  CTX.fillStyle='#0f1117'; CTX.fillRect(0,0,W,H);
+  CTX.putImageData(imageData, PAD, PAD);
+
+  // Contorno de frontera (val=0) más fino
+  OCTX.clearRect(0,0,W,H);
+  const RES2=150;
+  const dx2=(xr[1]-xr[0])/RES2, dy2=(yr[1]-yr[0])/RES2;
+  const grid = Array(RES2+1).fill(null).map(()=>Array(RES2+1).fill(0));
+  for(let pi=0;pi<=RES2;pi++) for(let pj=0;pj<=RES2;pj++) {
+    const wx=xr[0]+pi*dx2, wy=yr[0]+pj*dy2;
+    grid[pi][pj]=m.normPredict(extractFeatures([[wx,wy]])[0]);
+  }
+  // Marching squares simplificado
+  OCTX.strokeStyle='#ffffff';OCTX.lineWidth=1.8;
+  OCTX.beginPath();
+  for(let pi=0;pi<RES2;pi++) for(let pj=0;pj<RES2;pj++) {
+    const v=[grid[pi][pj],grid[pi+1][pj],grid[pi+1][pj+1],grid[pi][pj+1]];
+    const pos=[toPixel(xr[0]+pi*dx2,yr[0]+pj*dy2,xr,yr),
+               toPixel(xr[0]+(pi+1)*dx2,yr[0]+pj*dy2,xr,yr),
+               toPixel(xr[0]+(pi+1)*dx2,yr[0]+(pj+1)*dy2,xr,yr),
+               toPixel(xr[0]+pi*dx2,yr[0]+(pj+1)*dy2,xr,yr)];
+    // Simplificado: si hay cambio de signo, interpolar
+    const edges=[[0,1],[1,2],[2,3],[3,0]];
+    const cross=[];
+    for(const [a,c2] of edges) {
+      if((v[a]>0)!==(v[c2]>0)){
+        const t=v[a]/(v[a]-v[c2]);
+        cross.push([pos[a][0]*(1-t)+pos[c2][0]*t, pos[a][1]*(1-t)+pos[c2][1]*t]);
+      }
+    }
+    if(cross.length===2){OCTX.moveTo(cross[0][0],cross[0][1]);OCTX.lineTo(cross[1][0],cross[1][1]);}
+  }
+  OCTX.stroke();
+
+  // Márgenes (val = ±1)
+  for(const margin of [1,-1]) {
+    OCTX.strokeStyle=margin>0?'#ef535066':'#42a5f566';
+    OCTX.lineWidth=0.8; OCTX.setLineDash([4,4]);
+    OCTX.beginPath();
+    for(let pi=0;pi<RES2;pi++) for(let pj=0;pj<RES2;pj++) {
+      const v=[grid[pi][pj]-margin,grid[pi+1][pj]-margin,
+               grid[pi+1][pj+1]-margin,grid[pi][pj+1]-margin];
+      const pos=[toPixel(xr[0]+pi*dx2,yr[0]+pj*dy2,xr,yr),
+                 toPixel(xr[0]+(pi+1)*dx2,yr[0]+pj*dy2,xr,yr),
+                 toPixel(xr[0]+(pi+1)*dx2,yr[0]+(pj+1)*dy2,xr,yr),
+                 toPixel(xr[0]+pi*dx2,yr[0]+(pj+1)*dy2,xr,yr)];
+      const edges=[[0,1],[1,2],[2,3],[3,0]];
+      const cross=[];
+      for(const [a,c2] of edges) {
+        if((v[a]>0)!==(v[c2]>0)){
+          const t=v[a]/(v[a]-v[c2]);
+          cross.push([pos[a][0]*(1-t)+pos[c2][0]*t, pos[a][1]*(1-t)+pos[c2][1]*t]);
+        }
+      }
+      if(cross.length===2){OCTX.moveTo(cross[0][0],cross[0][1]);OCTX.lineTo(cross[1][0],cross[1][1]);}
+    }
+    OCTX.stroke();
+  }
+  OCTX.setLineDash([]);
+
+  // Marcar vectores soporte
+  const svSet = new Set(m.svIdx.map(k => S.trainIdx[k]));
+  drawPoints(CTX, xr, yr, [...svSet]);
+}
+
+// ═══════════════════════════════════════════
+// LOSS CANVAS
+// ═══════════════════════════════════════════
+function updateLossCanvas() {
+  const lc = document.getElementById('loss-canvas');
+  const lctx = lc.getContext('2d');
+  lctx.clearRect(0,0,190,70);
+  lctx.fillStyle='#1e2130'; lctx.fillRect(0,0,190,70);
+  const h = S.svmHistory;
+  if(h.length<2) return;
+  const W2=190, H2=70;
+  const mn=Math.min(...h), mx=Math.max(...h);
+  const range=mx-mn||1;
+  lctx.strokeStyle='#7eb8f7'; lctx.lineWidth=1.5;
+  lctx.beginPath();
+  h.forEach((v,i)=>{
+    const x=i/(h.length-1)*W2;
+    const y=H2-8-(v-mn)/range*(H2-16);
+    i===0?lctx.moveTo(x,y):lctx.lineTo(x,y);
+  });
+  lctx.stroke();
+  lctx.fillStyle='#7eb8f7'; lctx.font='9px sans-serif';
+  lctx.fillText(`W=${h[h.length-1].toFixed(3)}`,4,12);
+}
+
+// ═══════════════════════════════════════════
+// KERNEL INFO
+// ═══════════════════════════════════════════
+function updateKernelInfo() {
+  const k = document.getElementById('kernel').value;
+  const infos = {
+    rbf: 'K(x,x′) = exp(−γ‖x−x′‖²)<br>Dimensión implícita: ∞<br>Recomendado como baseline',
+    linear: 'K(x,x′) = xᵀx′<br>Interpretable: w = Σαᵢyᵢxᵢ<br>Bueno para p≫n',
+    poly: 'K(x,x′) = (γxᵀx′+c₀)ᵈ<br>Combina features polinomiales<br>Cuidado con d>4: overfitting',
+    sigmoid: 'K(x,x′) = tanh(γxᵀx′+c₀)<br>Similar a red neuronal 1 capa<br>No siempre cumple Mercer'
+  };
+  document.getElementById('kernel-info').innerHTML = infos[k]||'';
+}
+
+// ═══════════════════════════════════════════
+// CLICK EN CANVAS — agregar puntos
+// ═══════════════════════════════════════════
+OVL.addEventListener('click', (e) => {
+  if(!S.addMode) return;
+  const rect = OVL.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  if(S.data.length===0) return;
+  const {xr, yr} = getDataRange();
+  const [wx, wy] = fromPixel(px, py, xr, yr);
+  S.data.push([wx, wy]);
+  S.labels.push(S.addMode===0 ? -1 : 1);
+  const newIdx = S.data.length-1;
+  S.trainIdx.push(newIdx);
+  drawData();
+  if(document.getElementById('auto-train').checked && S.trained) trainSVM();
+});
+
+document.getElementById('add-class0').addEventListener('click', ()=>{
+  S.addMode = S.addMode===0 ? null : 0;
+  document.getElementById('add-class0').style.background = S.addMode===0?'#1a4a8a':'#1a2a3a';
+  document.getElementById('add-class1').style.background = '#2a1a1a';
+  OVL.style.cursor = S.addMode!==null ? 'crosshair' : 'default';
+});
+document.getElementById('add-class1').addEventListener('click', ()=>{
+  S.addMode = S.addMode===1 ? null : 1;
+  document.getElementById('add-class1').style.background = S.addMode===1?'#8a1a1a':'#2a1a1a';
+  document.getElementById('add-class0').style.background = '#1a2a3a';
+  OVL.style.cursor = S.addMode!==null ? 'crosshair' : 'default';
+});
+
+// ═══════════════════════════════════════════
+// UI LISTENERS
+// ═══════════════════════════════════════════
+document.querySelectorAll('.ds-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.ds-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    S.dataset = btn.dataset.ds;
+    generateData();
+  });
+});
+
+document.querySelectorAll('.feat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const f = btn.dataset.f;
+    if(S.features.has(f)) {
+      if(S.features.size>1) { S.features.delete(f); btn.classList.remove('active'); }
+    } else { S.features.add(f); btn.classList.add('active'); }
+    if(document.getElementById('auto-train').checked && S.trained) trainSVM();
+  });
+});
+
+document.getElementById('kernel').addEventListener('change', () => {
+  const k = document.getElementById('kernel').value;
+  document.getElementById('gamma-row').style.display  = k==='linear'?'none':'block';
+  document.getElementById('degree-row').style.display = k==='poly'?'block':'none';
+  document.getElementById('coef0-row').style.display  = (k==='poly'||k==='sigmoid')?'block':'none';
+  updateKernelInfo();
+  if(document.getElementById('auto-train').checked && S.trained) trainSVM();
+});
+
+function bindSlider(id, dispId, transform, label='') {
+  const sl = document.getElementById(id);
+  const dp = document.getElementById(dispId);
+  sl.addEventListener('input', () => {
+    dp.textContent = label + transform(+sl.value);
+    if(document.getElementById('auto-train').checked && S.trained) trainSVM();
+  });
+  dp.textContent = label + transform(+sl.value);
+}
+
+bindSlider('C', 'C-val', v=>'C = '+Math.pow(10,v).toFixed(3));
+bindSlider('gamma', 'gamma-val', v=>'γ = '+Math.pow(10,v).toFixed(3));
+bindSlider('degree', 'degree-val', v=>'d = '+v);
+bindSlider('coef0', 'coef0-val', v=>'coef0 = '+v);
+bindSlider('n-pts', 'n-pts-val', v=>v);
+bindSlider('noise', 'noise-val', v=>v);
+bindSlider('train-pct', 'train-pct-val', v=>v+'%');
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+updateKernelInfo();
+generateData();
+</script>
+</body>
+</html>
